@@ -2,7 +2,6 @@ import express from "express";
 import { MercadoPagoConfig, Preference } from "mercadopago";
 import cors from "cors";
 import fs from "fs";
-import { guardarConsultaConfirmada, obtenerConsultasPorTelefono } from "./consultas.js";
 
 const app = express();
 app.use(express.json());
@@ -12,6 +11,10 @@ const mercadopago = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN,
 });
 
+const archivoConsultas = "./consultas_confirmadas.json";
+const archivoHorarios = "./horarios_disponibles.json";
+
+// Crear pago y guardar consulta confirmada
 app.post("/crear-pago", async (req, res) => {
   const { nombre, telefono, fecha, hora } = req.body;
 
@@ -39,9 +42,7 @@ app.post("/crear-pago", async (req, res) => {
       },
     });
 
-    // Guardar en archivo local
-    guardarConsultaConfirmada({ nombre, telefono, fecha, hora, pago: true, timestamp: new Date().toISOString() });
-
+    guardarConsulta({ nombre, telefono, fecha, hora });
     res.json({ url: preference.init_point });
   } catch (error) {
     console.error("Error al crear pago:", error);
@@ -49,25 +50,70 @@ app.post("/crear-pago", async (req, res) => {
   }
 });
 
-// Ruta para obtener historial de un paciente o todas las consultas
-app.get("/consultas", (req, res) => {
-  const telefono = req.query.telefono;
-  const archivo = "./consultas_confirmadas.json";
+// Guardar horario disponible (agregado)
+app.post("/guardar-horario", (req, res) => {
+  const { fecha, hora } = req.body;
 
-  if (!fs.existsSync(archivo)) {
+  if (!fecha || !hora) {
+    return res.status(400).json({ error: "Faltan datos" });
+  }
+
+  let horarios = [];
+
+  if (fs.existsSync(archivoHorarios)) {
+    const datos = fs.readFileSync(archivoHorarios, "utf-8");
+    horarios = JSON.parse(datos);
+  }
+
+  horarios.push({ fecha, hora });
+
+  fs.writeFileSync(archivoHorarios, JSON.stringify(horarios, null, 2));
+  res.json({ mensaje: "Horario guardado exitosamente" });
+});
+
+// Obtener horarios disponibles (agregado)
+app.get("/horarios-disponibles", (req, res) => {
+  if (!fs.existsSync(archivoHorarios)) {
     return res.json([]);
   }
 
-  const datos = fs.readFileSync(archivo, "utf-8");
+  const datos = fs.readFileSync(archivoHorarios, "utf-8");
+  const horarios = JSON.parse(datos);
+  res.json(horarios);
+});
+
+// Obtener todas las consultas o historial por teléfono
+app.get("/consultas", (req, res) => {
+  const telefono = req.query.telefono;
+
+  if (!fs.existsSync(archivoConsultas)) {
+    return res.json([]);
+  }
+
+  const datos = fs.readFileSync(archivoConsultas, "utf-8");
   const consultas = JSON.parse(datos);
 
   if (telefono) {
-    const historial = consultas.filter((c) => c.telefono === telefono);
+    const historial = consultas.filter(c => c.telefono === telefono);
     return res.json(historial);
   }
 
   res.json(consultas);
 });
+
+// Función para guardar consultas confirmadas
+function guardarConsulta(consulta) {
+  let consultas = [];
+
+  if (fs.existsSync(archivoConsultas)) {
+    const datos = fs.readFileSync(archivoConsultas, "utf-8");
+    consultas = JSON.parse(datos);
+  }
+
+  consultas.push({ ...consulta, pago: true, timestamp: new Date().toISOString() });
+
+  fs.writeFileSync(archivoConsultas, JSON.stringify(consultas, null, 2));
+}
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
