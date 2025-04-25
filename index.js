@@ -50,38 +50,6 @@ app.post("/crear-pago", async (req, res) => {
   }
 });
 
-// Guardar horario disponible (agregado)
-app.post("/guardar-horario", (req, res) => {
-  const { fecha, hora } = req.body;
-
-  if (!fecha || !hora) {
-    return res.status(400).json({ error: "Faltan datos" });
-  }
-
-  let horarios = [];
-
-  if (fs.existsSync(archivoHorarios)) {
-    const datos = fs.readFileSync(archivoHorarios, "utf-8");
-    horarios = JSON.parse(datos);
-  }
-
-  horarios.push({ fecha, hora });
-
-  fs.writeFileSync(archivoHorarios, JSON.stringify(horarios, null, 2));
-  res.json({ mensaje: "Horario guardado exitosamente" });
-});
-
-// Obtener horarios disponibles (agregado)
-app.get("/horarios-disponibles", (req, res) => {
-  if (!fs.existsSync(archivoHorarios)) {
-    return res.json([]);
-  }
-
-  const datos = fs.readFileSync(archivoHorarios, "utf-8");
-  const horarios = JSON.parse(datos);
-  res.json(horarios);
-});
-
 // Obtener todas las consultas o historial por teléfono
 app.get("/consultas", (req, res) => {
   const telefono = req.query.telefono;
@@ -114,6 +82,36 @@ function guardarConsulta(consulta) {
 
   fs.writeFileSync(archivoConsultas, JSON.stringify(consultas, null, 2));
 }
+
+// Rutas de Agenda (nueva implementación)
+let horariosDisponibles = [];
+
+app.get("/agenda", (req, res) => {
+  res.json(horariosDisponibles);
+});
+
+app.post("/agenda", (req, res) => {
+  const { fecha, hora } = req.body;
+
+  if (!fecha || !hora) {
+    return res.status(400).json({ error: "Faltan datos" });
+  }
+
+  const nuevoHorario = {
+    id: Date.now(),
+    fecha,
+    hora
+  };
+
+  horariosDisponibles.push(nuevoHorario);
+  res.status(201).json(nuevoHorario);
+});
+
+app.delete("/agenda/:id", (req, res) => {
+  const id = parseInt(req.params.id);
+  horariosDisponibles = horariosDisponibles.filter(h => h.id !== id);
+  res.sendStatus(200);
+});
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
