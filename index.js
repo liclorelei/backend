@@ -42,7 +42,12 @@ app.post("/crear-pago", async (req, res) => {
       },
     });
 
+    // Guardar consulta confirmada
     guardarConsulta({ nombre, telefono, fecha, hora });
+
+    // Eliminar el horario reservado
+    eliminarHorarioReservado(fecha, hora);
+
     res.json({ url: preference.init_point });
   } catch (error) {
     console.error("Error al crear pago:", error);
@@ -62,6 +67,20 @@ function guardarConsulta(consulta) {
   consultas.push({ ...consulta, pago: true, timestamp: new Date().toISOString() });
 
   fs.writeFileSync(archivoConsultas, JSON.stringify(consultas, null, 2));
+}
+
+// Función para eliminar turno reservado
+function eliminarHorarioReservado(fecha, hora) {
+  if (!fs.existsSync(archivoHorarios)) return;
+
+  const datos = fs.readFileSync(archivoHorarios, "utf-8");
+  let horarios = JSON.parse(datos);
+
+  horarios = horarios.filter(
+    (h) => !(h.fecha === fecha && h.hora === hora)
+  );
+
+  fs.writeFileSync(archivoHorarios, JSON.stringify(horarios, null, 2));
 }
 
 // Obtener todas las consultas o historial por teléfono
